@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Check Trace</title>
+    <style>
+        .line {
+            display: flex;
+        }
+        .col {
+            flex: 1;
+            border-right: dashed black;
+            padding-left: 5px;
+        }
+        .col:first-child{
+            flex: none;
+        }
+        .center {
+            text-align: center;
+        }
+        #hidden {
+            display: none;
+        }
+        </style>
+</head>
+<body>
+<button id="hidden">hidden</button>
+{% for info in infos %}
+    <div class="line">
+        <div class="col">
+            <img width="320px" src={{ "'static/"|safe + user_name + "/taskResult/" + package_name + "/" + info.basic_name + '.png\'' |safe}} >
+            <br/>
+            <button onclick="readFile({{ "'static/"|safe + user_name + '/taskResult/' + package_name + '/' + info.basic_name + '.txt\'' |safe}})">复制布局</button>
+        </div>
+        <div class="col">
+            <p>时间戳：{{ info.timestamp }}</p>
+            <p>前缀：{{ info.is_prefix }}</p>
+            <p>主干：{{ info.is_circle }}</p>
+            <p>节点：{{ info.node_type }}</p>
+            <p>操作：{{ info.action_type }}</p>
+            <p>文本：{{ info.action_text }}</p>
+            <p>参数：{{ info.is_para }}</p>
+            <p>尾部删除：{{ info.is_delete }}</p>
+        </div>
+        <div class="col">
+            <label for="{{ user_name + '-' + package_name + '-' + info.basic_name }}">报告问题</label>
+            <br/>
+            <textarea id="{{ user_name + '-' + package_name + '-' + info.basic_name }}"></textarea>
+            <br/>
+            <button onclick="uploadErrorReport({{ "'" + user_name + "'" }}, {{ "'" + package_name + "'" }}, {{ "'" + info.basic_name + "'" }})">上传数据</button>
+        </div>
+    </div>
+    <hr/>
+    {% if info.is_last %}
+        <div class="center">
+            <div class="line">
+                <div class="col">
+                    <h2>最终结果</h2>
+                    <img width="320px" src={{ "\""|safe + "static/" + user_name + "/taskResult/" + package_name + "/" + info.last_name + '.png' + "\"" |safe}} >
+                    <br/>
+                    <button onclick="readFile({{ "'static/"|safe + user_name + "/taskResult/" + package_name + "/" + info.last_name + ".txt'" |safe }})">复制布局</button>
+                </div>
+                <div class="col">
+                    <label for="{{ user_name + '-' + package_name + '-' + info.last_name }}">设置自然语言指令</label>
+                    <br/>
+                    <textarea id="{{ user_name + '-' + package_name + '-' + info.last_name }}"></textarea>
+                    <br/>
+                    <button onclick="uploadNLC({{ "'" + user_name + "'" }}, {{ "'" + package_name + "'" }}, {{ "'" + info.last_name + "'" }})">上传自然语言指令</button>
+                </div>
+
+            </div>
+            <hr/>
+            <br/>
+        </div>
+    {% endif %}
+{% endfor %}
+<button onclick="next()">下一个</button>
+</body>
+
+<script type="text/javascript">
+    function click(timestamp) {
+        console.log("click " + timestamp);
+    }
+
+    function next() {
+        window.location.href = document.location.origin + '/check_task_result?u={{ user_name }}&p={{ package_name }}&i={{ task_index + 1 }}';
+    }
+
+    function Toast(msg,duration){
+        duration=isNaN(duration)?1000:duration;
+        var m = document.createElement('div');
+        m.innerHTML = msg;
+        m.style.cssText="width:fit-content; padding:0px 5px; background:#000; opacity:0.5; height:40px; color:#fff; line-height:40px; text-align:center; border-radius:5px; position:fixed; top:80%; left:50%; transform: translate(-50%, 0); z-index:999999; font-weight:bold;";
+        document.body.appendChild(m);
+        setTimeout(function() {
+            var d = 0.5;
+            m.style.webkitTransition = '-webkit-transform ' + d + 's ease-in, opacity ' + d + 's ease-in';
+            m.style.opacity = '0';
+            setTimeout(function() { document.body.removeChild(m) }, d * 1000);
+        }, duration);
+    }
+
+    let globalText = "";
+    let clipBoard;
+
+    window.onload = ()=>{
+        clipBoard = new ClipboardJS('#hidden', {
+            text: function (trigger) {
+                return globalText
+            }
+        });
+        clipBoard.on('success', e=>{
+            Toast('copied')
+        });
+
+        clipBoard.on('error', function(e) {
+            console.error('Action:', e.action);
+            console.error('Trigger:', e.trigger);
+        });
+    };
+    function readFile(file_path) {
+        fetch(file_path).then(function (response) {
+            return response.text()
+        }).then(function (text) {
+            // console.log(text);
+            globalText = text;
+
+            let e = document.createEvent("MouseEvents");
+            e.initEvent("click", true, true);
+            document.getElementById("hidden").dispatchEvent(e);
+        })
+    }
+    
+    function uploadErrorReport(user_name, package_name, basic_name) {
+        let elementId = `${user_name}-${package_name}-${basic_name}`;
+        let reportText = document.getElementById(elementId).value;
+        if(reportText.length === 0){
+            Toast("请输入错误信息");
+            return;
+        }
+        axios.post('/upload_error_report', {
+            user_name,
+            package_name,
+            basic_name,
+            report_text: reportText
+        }).then(response=>{
+            Toast('已上传');
+        }).catch(error=>{
+            Toast('失败');
+            console.log(error);
+        })
+    }
+
+    function uploadNLC(user_name, package_name, last_name) {
+        let elementId = `${user_name}-${package_name}-${last_name}`;
+        let nlc = document.getElementById(elementId).value;
+        if(nlc.length === 0){
+            Toast("请输入自然语言指令");
+            return;
+        }
+
+        axios.post('/upload_nlc', {
+            user_name,
+            package_name,
+            last_name,
+            nlc
+        }).then((res)=>{
+            Toast('已上传');
+        }).catch(error=>{
+            Toast("失败");
+            console.log(error);
+        });
+    }
+</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/clipboard.js/2.0.6/clipboard.min.js"></script>
+<script src="https://cdn.bootcdn.net/ajax/libs/axios/0.20.0-0/axios.js"></script>
+</html>
